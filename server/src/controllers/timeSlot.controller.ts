@@ -27,7 +27,6 @@ export const getMySlots = async (req: AuthRequest, res: Response) => {
   if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
   try {
-    // First get dentist id from user id
     const [dentistRows] = await db.query(
       `SELECT id FROM dentists WHERE user_id = ?`, [userId]
     );
@@ -37,11 +36,20 @@ export const getMySlots = async (req: AuthRequest, res: Response) => {
     const dentistId = (dentistRows as any[])[0].id;
 
     const sql = `
-      SELECT id, slot_date, slot_time, is_available
-      FROM time_slots
-      WHERE dentist_id = ?
-        AND slot_date >= CURDATE()
-      ORDER BY slot_date ASC, slot_time ASC
+      SELECT 
+        ts.id, ts.slot_date, ts.slot_time, ts.is_available,
+        a.id AS appointment_id, a.status AS appointment_status, a.notes,
+        u.name AS patient_name, u.email AS patient_email, u.phone AS patient_phone
+      FROM time_slots ts
+      LEFT JOIN appointments a 
+        ON a.dentist_id = ts.dentist_id 
+        AND a.appointment_date = ts.slot_date 
+        AND a.appointment_time = ts.slot_time
+        AND a.status NOT IN ('CANCELLED')
+      LEFT JOIN users u ON a.patient_id = u.id
+      WHERE ts.dentist_id = ?
+        AND ts.slot_date >= CURDATE()
+      ORDER BY ts.slot_date ASC, ts.slot_time ASC
     `;
     const [rows] = await db.query(sql, [dentistId]);
     res.json(rows);

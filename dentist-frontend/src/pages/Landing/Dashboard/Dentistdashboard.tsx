@@ -39,11 +39,12 @@ interface SlotItem {
   slot_time: string;
   is_available: boolean;
   appointment_id?: number;
-  appointment_status?: string;
+  appointment_status?: "PENDING" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "REJECTED";
   notes?: string;
   patient_name?: string;
   patient_email?: string;
   patient_phone?: string;
+  consultation_fee?: number;
 }
 
 const STATUS_CONFIG = {
@@ -210,6 +211,23 @@ const [slotMsg,        setSlotMsg]        = useState<{ text: string; type: "succ
     setSlotMsg({ text: err.response?.data?.message || "Failed to add slot.", type: "error" });
   } finally {
     setAddingSlot(false);
+  }
+};
+
+const handleUpdateAppointmentStatus = async (
+  appointmentId: number,
+  status: "CONFIRMED" | "REJECTED" | "COMPLETED" | "CANCELLED"
+) => {
+  try {
+    await axios.patch(
+      `http://localhost:5000/api/appointments/${appointmentId}/status`,
+      { status },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    setSlotMsg({ text: `Appointment ${status.toLowerCase()} successfully!`, type: "success" });
+    await fetchSlots();
+  } catch (err: any) {
+    setSlotMsg({ text: err.response?.data?.message || "Failed to update appointment.", type: "error" });
   }
 };
 
@@ -750,44 +768,96 @@ const handleDeleteSlot = async (slotId: number) => {
       <>
         <h3 className="media-existing-title">Upcoming Slots ({slots.length})</h3>
         <div className="slots-manage-grid">
-         {slots.map((slot) => (
-          <div key={slot.id} className={`slot-card ${!slot.is_available ? "slot-card--booked" : ""}`}>
-            <div className="slot-card-info">
-              <span className="slot-card-date">
-                📅 {new Date(slot.slot_date).toLocaleDateString("en-IN", {
-                  weekday: "short", year: "numeric", month: "short", day: "numeric"
-                })}
-              </span>
-              <span className="slot-card-time">
-                🕐 {slot.slot_time.slice(0, 5)}
-              </span>
-              <span className={`slot-card-status ${slot.is_available ? "slot-card-status--open" : "slot-card-status--booked"}`}>
-                {slot.is_available ? "Available" : "Booked"}
-              </span>
-            </div>
+        {slots.map((slot) => {
+  const status = slot.appointment_status;
+  const hasPatient = !!slot.patient_name;
+  const isCancelled = status === "CANCELLED";
 
-            {/* Patient details when booked */}
-            {!slot.is_available && slot.patient_name && (
-              <div className="slot-patient-info">
-                <p><strong>👤 {slot.patient_name}</strong></p>
-                {slot.patient_phone && <p>📞 {slot.patient_phone}</p>}
-                {slot.patient_email && <p>✉️ {slot.patient_email}</p>}
-                {slot.appointment_status && (
-                  <span className={`slot-appt-status slot-appt-status--${slot.appointment_status.toLowerCase()}`}>
-                    {slot.appointment_status}
-                  </span>
-                )}
-                {slot.notes && <p className="slot-notes">📝 {slot.notes}</p>}
-              </div>
-            )}
+  return (
+    <div
+      key={slot.id}
+      className={`slot-card 
+        ${!slot.is_available ? "slot-card--booked" : ""}
+        ${isCancelled ? "slot-card--cancelled" : ""}
+      `}
+    >
+      {/* Date / Time / Status row */}
+      <div className="slot-card-info">
+        <span className="slot-card-date">
+          📅 {new Date(slot.slot_date).toLocaleDateString("en-IN", {
+            weekday: "short", year: "numeric", month: "short", day: "numeric",
+          })}
+        </span>
+        <span className="slot-card-time">🕐 {slot.slot_time.slice(0, 5)}</span>
+        <span className={`slot-card-status ${
+          isCancelled              ? "slot-card-status--cancelled" :
+          slot.is_available        ? "slot-card-status--open"      :
+                                     "slot-card-status--booked"
+        }`}>
+          {isCancelled ? "Cancelled by Patient" : slot.is_available ? "Available" : "Booked"}
+        </span>
+      </div>
 
-            {slot.is_available && (
-              <button className="clinic-image-delete" onClick={() => handleDeleteSlot(slot.id)}>
-                🗑 Delete
-              </button>
+      {/* Patient info block */}
+      {hasPatient && (
+        <div className={`slot-patient-info ${isCancelled ? "slot-patient-info--cancelled" : ""}`}>
+          <div className="slot-patient-header">
+            <p><strong>👤 {slot.patient_name}</strong></p>
+            {status && (
+              <span className={`slot-appt-status slot-appt-status--${status.toLowerCase()}`}>
+                {status}
+              </span>
             )}
           </div>
-        ))}
+          {slot.patient_phone && <p>📞 {slot.patient_phone}</p>}
+          {/* Fee */}
+          {slot.consultation_fee !== undefined && (
+            <p className="slot-fee">💰 Consultation Fee: <strong>₹{slot.consultation_fee}</strong></p>
+          )}
+          {slot.patient_email && <p>✉️ {slot.patient_email}</p>}
+          {slot.notes && <p className="slot-notes">📝 {slot.notes}</p>}
+
+          {/* Action buttons — only for PENDING */}
+          {status === "PENDING" && slot.appointment_id && (
+            <div className="slot-action-btns">
+              <button
+                className="slot-btn slot-btn--confirm"
+                onClick={() => handleUpdateAppointmentStatus(slot.appointment_id!, "CONFIRMED")}
+              >
+                ✅ Confirm
+              </button>
+              <button
+                className="slot-btn slot-btn--reject"
+                onClick={() => handleUpdateAppointmentStatus(slot.appointment_id!, "REJECTED")}
+              >
+                ❌ Reject
+              </button>
+            </div>
+          )}
+
+          {/* Mark complete — only for CONFIRMED */}
+          {status === "CONFIRMED" && slot.appointment_id && (
+            <div className="slot-action-btns">
+              <button
+                className="slot-btn slot-btn--complete"
+                onClick={() => handleUpdateAppointmentStatus(slot.appointment_id!, "COMPLETED")}
+              >
+                🏁 Mark as Completed
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Delete only available slots with no booking */}
+      {slot.is_available && !hasPatient && (
+        <button className="clinic-image-delete" onClick={() => handleDeleteSlot(slot.id)}>
+          🗑 Delete
+        </button>
+      )}
+    </div>
+  );
+})}
         </div>
       </>
     )}

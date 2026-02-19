@@ -511,3 +511,80 @@
   font-style: italic;
   color: #666;
 }
+.slot-card--cancelled {
+  border-left: 4px solid #dc3545;
+  opacity: 0.85;
+}
+
+.slot-card-status--cancelled { background: #f8d7da; color: #842029; }
+
+.slot-patient-info {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  color: #444;
+}
+
+.slot-patient-info--cancelled {
+  background: #fff5f5;
+}
+
+.slot-patient-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.slot-appt-status {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.slot-appt-status--pending   { background: #fff3cd; color: #856404; }
+.slot-appt-status--confirmed { background: #d1e7dd; color: #0f5132; }
+.slot-appt-status--completed { background: #cfe2ff; color: #084298; }
+.slot-appt-status--cancelled { background: #f8d7da; color: #842029; }
+.slot-appt-status--rejected  { background: #e2e3e5; color: #41464b; }
+
+.slot-action-btns {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.slot-btn {
+  padding: 0.35rem 0.9rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.slot-btn:hover { opacity: 0.85; }
+
+.slot-btn--confirm  { background: #d1e7dd; color: #0f5132; }
+.slot-btn--reject   { background: #f8d7da; color: #842029; }
+.slot-btn--complete { background: #cfe2ff; color: #084298; }
+
+.slot-notes {
+  font-style: italic;
+  color: #666;
+  font-size: 0.8rem;
+}
+.slot-fee {
+  font-size: 0.85rem;
+  color: #2d6a4f;
+  font-weight: 500;
+}

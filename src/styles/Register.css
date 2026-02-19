@@ -1,0 +1,213 @@
+.register-form-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background-color: #f3f4f6;
+}
+
+.register-form {
+  background-color: white;
+  padding: 40px;
+  border-radius: 10px;
+  width: 400px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+}
+
+.register-form h2 {
+  text-align: center;
+  margin-bottom: 20px;
+  font-size: 28px;
+}
+
+.register-form input {
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 15px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+}
+
+.register-form button {
+  width: 100%;
+  padding: 12px;
+  border-radius: 6px;
+  background-color: #2563eb;
+  color: white;
+  font-weight: bold;
+  border: none;
+  cursor: pointer;
+}
+
+.register-form button:hover {
+  background-color: #1d4ed8;
+}
+
+.register-error {
+  color: red;
+  margin-bottom: 10px;
+  text-align: center;
+}
+
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700&display=swap');
+
+.register-form-container {
+  font-family: 'Nunito', sans-serif;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f9fafb;
+  padding: 24px;
+}
+
+.register-form {
+  background: white;
+  padding: 40px 36px;
+  border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+  width: 100%;
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.register-form h2 {
+  font-size: 24px;
+  font-weight: 700;
+  color: #0f1d2e;
+  margin-bottom: 0;
+}
+
+.register-subtitle {
+  font-size: 14px;
+  color: #6b7280;
+  margin-top: -8px;
+}
+
+.register-error {
+  background: #fee2e2;
+  color: #991b1b;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.form-group input {
+  padding: 11px 14px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 9px;
+  font-size: 14px;
+  font-family: 'Nunito', sans-serif;
+  color: #111827;
+  outline: none;
+  transition: border-color 0.2s;
+  background: #fafafa;
+}
+
+.form-group input:focus {
+  border-color: #0f1d2e;
+  background: white;
+}
+
+/* Role Selector */
+.role-selector {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.role-btn {
+  padding: 12px;
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+  background: white;
+  font-family: 'Nunito', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.role-btn:hover {
+  border-color: #0f1d2e;
+  color: #0f1d2e;
+}
+
+.role-btn--active {
+  border-color: #0f1d2e;
+  background: #0f1d2e;
+  color: white;
+}
+
+/* Dentist note */
+.dentist-note {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 9px;
+  padding: 12px 14px;
+  font-size: 13px;
+  color: #1e40af;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+/* Submit Button */
+.register-submit-btn {
+  padding: 13px;
+  background: #0f1d2e;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: 'Nunito', sans-serif;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-top: 4px;
+}
+
+.register-submit-btn:hover:not(:disabled) {
+  background: #162840;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(15,29,46,0.2);
+}
+
+.register-submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.register-login-link {
+  text-align: center;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.register-login-link a {
+  color: #0f1d2e;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.register-login-link a:hover {
+  text-decoration: underline;
+}

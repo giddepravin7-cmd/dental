@@ -21,7 +21,7 @@ export const getSlotsByDentist = async (req: Request, res: Response) => {
   }
 };
 
-// GET all slots for dentist's own dashboard (includes unavailable)
+// GET all slots for dentist's own dashboard (includes unavailable + patient details)
 export const getMySlots = async (req: AuthRequest, res: Response) => {
   const userId = req.user?.id;
   if (!userId) return res.status(401).json({ message: "Unauthorized" });
@@ -35,23 +35,32 @@ export const getMySlots = async (req: AuthRequest, res: Response) => {
 
     const dentistId = (dentistRows as any[])[0].id;
 
-   const sql = `
-  SELECT 
-    ts.id, ts.slot_date, ts.slot_time, ts.is_available,
-    a.id AS appointment_id, a.status AS appointment_status, a.notes,
-    u.name AS patient_name, u.email AS patient_email, u.phone AS patient_phone,
-    d.fees AS consultation_fee
-  FROM time_slots ts
-  LEFT JOIN appointments a 
-    ON a.dentist_id = ts.dentist_id 
-    AND a.appointment_date = ts.slot_date 
-    AND a.appointment_time = ts.slot_time
-  LEFT JOIN users u ON a.patient_id = u.id
-  LEFT JOIN dentists d ON ts.dentist_id = d.id
-  WHERE ts.dentist_id = ?
-    AND ts.slot_date >= CURDATE()
-  ORDER BY ts.slot_date ASC, ts.slot_time ASC
-`;
+    const sql = `
+      SELECT 
+        ts.id,
+        DATE_FORMAT(ts.slot_date, '%Y-%m-%d')  AS slot_date,
+        TIME_FORMAT(ts.slot_time, '%H:%i')      AS slot_time,
+        ts.is_available,
+        a.id                                    AS appointment_id,
+        a.status                                AS appointment_status,
+        a.notes,
+        DATE_FORMAT(a.appointment_date, '%Y-%m-%d') AS appointment_date,
+        TIME_FORMAT(a.appointment_time, '%H:%i')    AS appointment_time,
+        u.name                                  AS patient_name,
+        u.email                                 AS patient_email,
+        u.phone                                 AS patient_phone,
+        d.fees                                  AS consultation_fee
+      FROM time_slots ts
+      LEFT JOIN appointments a
+        ON  a.dentist_id                             = ts.dentist_id
+        AND DATE_FORMAT(a.appointment_date, '%Y-%m-%d') = DATE_FORMAT(ts.slot_date, '%Y-%m-%d')
+        AND TIME_FORMAT(a.appointment_time, '%H:%i')    = TIME_FORMAT(ts.slot_time, '%H:%i')
+      LEFT JOIN users u    ON a.patient_id  = u.id
+      LEFT JOIN dentists d ON ts.dentist_id = d.id
+      WHERE ts.dentist_id = ?
+        AND DATE_FORMAT(ts.slot_date, '%Y-%m-%d') >= DATE_FORMAT(CURDATE(), '%Y-%m-%d')
+      ORDER BY ts.slot_date ASC, ts.slot_time ASC
+    `;
     const [rows] = await db.query(sql, [dentistId]);
     res.json(rows);
   } catch (error: any) {
@@ -89,14 +98,15 @@ export const addSlot = async (req: AuthRequest, res: Response) => {
     await db.query(sql, [dentistId, slot_date, slot_time]);
     res.status(201).json({ message: "Slot added successfully" });
   } catch (error: any) {
-    // Duplicate entry
     if (error.code === "ER_DUP_ENTRY")
       return res.status(409).json({ message: "This slot already exists" });
     res.status(500).json({ message: "Database error", error: error.message });
   }
 };
 
-// DELETE a slot (dentist only, only if still available)
+// DELETE a slot (dentist only)
+// Allowed: available slots with no booking, or slots with CANCELLED/REJECTED/COMPLETED appointments
+// Blocked: slots with PENDING or CONFIRMED appointments
 export const deleteSlot = async (req: AuthRequest, res: Response) => {
   const userId = req.user?.id;
   const { slotId } = req.params;
@@ -111,16 +121,26 @@ export const deleteSlot = async (req: AuthRequest, res: Response) => {
 
     const dentistId = (dentistRows as any[])[0].id;
 
-    // Check ownership and availability
+    // Fetch slot + linked appointment status
     const [slotRows] = await db.query(
-      `SELECT id, is_available FROM time_slots WHERE id = ? AND dentist_id = ?`,
+      `SELECT ts.id, ts.is_available, a.status AS appointment_status
+       FROM time_slots ts
+       LEFT JOIN appointments a
+         ON  a.dentist_id       = ts.dentist_id
+         AND a.appointment_date = ts.slot_date
+         AND a.appointment_time = ts.slot_time
+       WHERE ts.id = ? AND ts.dentist_id = ?`,
       [slotId, dentistId]
     );
+
     if ((slotRows as any[]).length === 0)
       return res.status(404).json({ message: "Slot not found" });
 
-    if (!(slotRows as any[])[0].is_available)
-      return res.status(400).json({ message: "Cannot delete a booked slot" });
+    const appointmentStatus = (slotRows as any[])[0].appointment_status;
+
+    // Block deletion only for active (PENDING / CONFIRMED) bookings
+    if (appointmentStatus === "PENDING" || appointmentStatus === "CONFIRMED")
+      return res.status(400).json({ message: "Cannot delete a slot with an active booking" });
 
     await db.query(`DELETE FROM time_slots WHERE id = ?`, [slotId]);
     res.json({ message: "Slot deleted successfully" });

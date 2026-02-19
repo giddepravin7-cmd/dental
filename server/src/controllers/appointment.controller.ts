@@ -8,7 +8,7 @@ export interface Appointment {
   dentist_id: number;
   appointment_date: string;
   appointment_time: string;
-  status?: "PENDING" | "CONFIRMED" | "CANCELLED" | "COMPLETED";
+  status?: "PENDING" | "CONFIRMED" | "CANCELLED" | "COMPLETED" | "REJECTED";
   notes?: string;
 }
 
@@ -89,7 +89,7 @@ export const addAppointment = async (req: AuthRequest, res: Response) => {
       `
       SELECT id FROM appointments
       WHERE dentist_id = ? AND appointment_date = ? AND appointment_time = ?
-      AND status NOT IN ('CANCELLED')
+      AND status NOT IN ('CANCELLED', 'REJECTED')
       `,
       [dentist_id, appointment_date, appointment_time]
     );
@@ -146,14 +146,8 @@ export const cancelAppointment = async (req: AuthRequest, res: Response) => {
       [id, patientId]
     );
 
-    // Free up the slot again
-    await db.query(
-      `UPDATE time_slots SET is_available = TRUE 
-       WHERE dentist_id = (SELECT dentist_id FROM appointments WHERE id = ?)
-       AND slot_date = (SELECT appointment_date FROM appointments WHERE id = ?)
-       AND slot_time = (SELECT appointment_time FROM appointments WHERE id = ?)`,
-      [id, id, id]
-    );
+    // Do NOT free the slot — keep is_available = FALSE so dentist can see the cancellation.
+    // Dentist can manually delete the slot from their dashboard to reopen it.
 
     res.json({ message: "Appointment cancelled successfully" });
   } catch (error: any) {
@@ -188,7 +182,7 @@ export const rescheduleAppointment = async (req: AuthRequest, res: Response) => 
       `
       SELECT id FROM appointments
       WHERE dentist_id = ? AND appointment_date = ? AND appointment_time = ?
-      AND status NOT IN ('CANCELLED') AND id != ?
+      AND status NOT IN ('CANCELLED', 'REJECTED') AND id != ?
       `,
       [appointments[0].dentist_id, appointment_date, appointment_time, id]
     );
@@ -198,6 +192,75 @@ export const rescheduleAppointment = async (req: AuthRequest, res: Response) => 
     await db.query(
       `UPDATE appointments SET appointment_date = ?, appointment_time = ? WHERE id = ? AND patient_id = ?`,
       [appointment_date, appointment_time, id, patientId]
+    );
+
+    res.json({ message: "Appointment rescheduled successfully" });
+  } catch (error: any) {
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+// RESCHEDULE appointment by DENTIST (for PENDING or CONFIRMED appointments)
+export const rescheduleAppointmentByDentist = async (req: AuthRequest, res: Response) => {
+  const userId = req.user?.id;
+  const { id } = req.params;
+  const { appointment_date, appointment_time } = req.body;
+  if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+  if (!appointment_date || !appointment_time)
+    return res.status(400).json({ message: "appointment_date and appointment_time are required" });
+
+  try {
+    // Get dentist id from user id
+    const [dentistRows] = await db.query(
+      `SELECT id FROM dentists WHERE user_id = ?`, [userId]
+    );
+    if ((dentistRows as any[]).length === 0)
+      return res.status(403).json({ message: "Dentist profile not found" });
+
+    const dentistId = (dentistRows as any[])[0].id;
+
+    // Get the appointment
+    const [rows] = await db.query(
+      `SELECT id, status, appointment_date, appointment_time FROM appointments WHERE id = ? AND dentist_id = ?`,
+      [id, dentistId]
+    );
+    if ((rows as any[]).length === 0)
+      return res.status(404).json({ message: "Appointment not found" });
+
+    const appt = (rows as any[])[0];
+
+    if (appt.status === "CANCELLED" || appt.status === "COMPLETED" || appt.status === "REJECTED")
+      return res.status(400).json({ message: `Cannot reschedule a ${appt.status} appointment` });
+
+    // Check new slot is not already taken by another appointment
+    const [conflict] = await db.query(
+      `SELECT id FROM appointments
+       WHERE dentist_id = ? AND appointment_date = ? AND appointment_time = ?
+       AND status NOT IN ('CANCELLED', 'REJECTED') AND id != ?`,
+      [dentistId, appointment_date, appointment_time, id]
+    );
+    if ((conflict as any[]).length > 0)
+      return res.status(409).json({ message: "This time slot is already booked" });
+
+    // Free the old time slot
+    await db.query(
+      `UPDATE time_slots SET is_available = TRUE
+       WHERE dentist_id = ? AND slot_date = ? AND slot_time = ?`,
+      [dentistId, appt.appointment_date, appt.appointment_time]
+    );
+
+    // Mark the new time slot as unavailable
+    await db.query(
+      `UPDATE time_slots SET is_available = FALSE
+       WHERE dentist_id = ? AND slot_date = ? AND slot_time = ?`,
+      [dentistId, appointment_date, appointment_time]
+    );
+
+    // Update the appointment date/time and set status to CONFIRMED
+    await db.query(
+      `UPDATE appointments SET appointment_date = ?, appointment_time = ?, status = 'CONFIRMED' WHERE id = ?`,
+      [appointment_date, appointment_time, id]
     );
 
     res.json({ message: "Appointment rescheduled successfully" });
@@ -237,7 +300,7 @@ export const getAppointmentsByDentist = async (req: AuthRequest, res: Response) 
   }
 };
 
-// UPDATE appointment status (dentist only)
+// UPDATE appointment status (dentist only) — CONFIRMED / COMPLETED / CANCELLED / REJECTED
 export const updateAppointmentStatus = async (req: AuthRequest, res: Response) => {
   const userId = req.user?.id;
   const { id } = req.params;
@@ -265,7 +328,7 @@ export const updateAppointmentStatus = async (req: AuthRequest, res: Response) =
       return res.status(404).json({ message: "Appointment not found" });
 
     const current = (rows as any[])[0].status;
-    if (current === "CANCELLED" || current === "COMPLETED")
+    if (current === "CANCELLED" || current === "COMPLETED" || current === "REJECTED")
       return res.status(400).json({ message: `Cannot update a ${current} appointment` });
 
     await db.query(

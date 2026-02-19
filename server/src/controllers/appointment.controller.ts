@@ -244,7 +244,7 @@ export const updateAppointmentStatus = async (req: AuthRequest, res: Response) =
   const { status } = req.body;
   if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
-  const allowedStatuses = ["CONFIRMED", "COMPLETED", "CANCELLED"];
+  const allowedStatuses = ["CONFIRMED", "COMPLETED", "CANCELLED", "REJECTED"];
   if (!allowedStatuses.includes(status))
     return res.status(400).json({ message: `Status must be one of: ${allowedStatuses.join(", ")}` });
 

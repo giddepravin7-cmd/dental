@@ -588,3 +588,70 @@
   color: #2d6a4f;
   font-weight: 500;
 }
+.slot-btn--reschedule { background: #fff3cd; color: #856404; }
+
+.reschedule-form {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  background: #fffbea;
+  border: 1px dashed #f0c040;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.reschedule-form-title {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: #856404;
+}
+
+.reschedule-form-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.reschedule-form-row input {
+  padding: 0.35rem 0.6rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  flex: 1;
+  min-width: 130px;
+}
+.slot-patient-name   { font-weight: 700; font-size: 0.95rem; margin: 0; }
+.slot-patient-detail { font-size: 0.85rem; color: #444; margin: 0; }
+
+.slot-btn--reschedule { background: #fff3cd; color: #856404; }
+
+.reschedule-form {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  background: #fffbea;
+  border: 1px dashed #f0c040;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.reschedule-form-title {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: #856404;
+  margin: 0;
+}
+.reschedule-form-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.reschedule-form-row input {
+  padding: 0.35rem 0.6rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  flex: 1;
+  min-width: 130px;
+}

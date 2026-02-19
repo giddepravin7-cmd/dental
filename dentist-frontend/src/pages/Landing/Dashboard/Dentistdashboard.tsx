@@ -45,6 +45,8 @@ interface SlotItem {
   patient_email?: string;
   patient_phone?: string;
   consultation_fee?: number;
+  appointment_date?: string;
+  appointment_time?: string;
 }
 
 const STATUS_CONFIG = {
@@ -73,13 +75,18 @@ const DentistDashboard: React.FC = () => {
   const [activeCategory, setActiveCategory] = useState<string>(SERVICE_CATALOGUE[0].category);
 
   // Active dashboard tab
-const [activeTab, setActiveTab] = useState<"profile" | "gallery" | "testimonials" | "slots">("profile");
+  const [activeTab, setActiveTab] = useState<"profile" | "gallery" | "testimonials" | "slots">("profile");
+
   // Time Slots
-const [slots,          setSlots]          = useState<SlotItem[]>([]);
-const [slotDate,       setSlotDate]       = useState("");
-const [slotTime,       setSlotTime]       = useState("");
-const [addingSlot,     setAddingSlot]     = useState(false);
-const [slotMsg,        setSlotMsg]        = useState<{ text: string; type: "success" | "error" } | null>(null);
+  const [slots,           setSlots]           = useState<SlotItem[]>([]);
+  const [slotDate,        setSlotDate]        = useState("");
+  const [slotTime,        setSlotTime]        = useState("");
+  const [addingSlot,      setAddingSlot]      = useState(false);
+  const [slotMsg,         setSlotMsg]         = useState<{ text: string; type: "success" | "error" } | null>(null);
+  const [reschedulingId,  setReschedulingId]  = useState<number | null>(null);
+  const [rescheduleDate,  setRescheduleDate]  = useState("");
+  const [rescheduleTime,  setRescheduleTime]  = useState("");
+  const [rescheduling,    setRescheduling]    = useState(false);
 
   // Clinic images
   const [clinicImages,      setClinicImages]      = useState<ClinicImage[]>([]);
@@ -117,49 +124,48 @@ const [slotMsg,        setSlotMsg]        = useState<{ text: string; type: "succ
     fetchProfile();
   }, []);
 
+  /* ── Data fetching ── */
   const fetchProfile = async () => {
-  try {
-    const res = await axios.get("http://localhost:5000/api/dentists/me", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const data: DentistProfile = res.data;
-    setProfile(data);
-    setForm({
-      qualification: data.qualification, experience: String(data.experience),
-      clinic_name: data.clinic_name, clinic_address: data.clinic_address,
-      fees: String(data.fees), specialization: data.specialization,
-      latitude: String(data.latitude), longitude: String(data.longitude),
-    });
-    if (data.services_offered && data.services_offered.length > 0) {
-      const saved = data.services_offered;
-      setServices(buildEmptyServices().map((item) => {
-        const found = saved.find((s) => s.category === item.category && s.service_name === item.service_name);
-        return found ? { ...item, fee: found.fee } : item;
-      }));
+    try {
+      const res = await axios.get("http://localhost:5000/api/dentists/me", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data: DentistProfile = res.data;
+      setProfile(data);
+      setForm({
+        qualification: data.qualification, experience: String(data.experience),
+        clinic_name: data.clinic_name,     clinic_address: data.clinic_address,
+        fees: String(data.fees),           specialization: data.specialization,
+        latitude: String(data.latitude),   longitude: String(data.longitude),
+      });
+      if (data.services_offered && data.services_offered.length > 0) {
+        const saved = data.services_offered;
+        setServices(buildEmptyServices().map((item) => {
+          const found = saved.find((s) => s.category === item.category && s.service_name === item.service_name);
+          return found ? { ...item, fee: found.fee } : item;
+        }));
+      }
+      if (data.profile_photo) setPhotoPreview(`http://localhost:5000${data.profile_photo}`);
+      await fetchMedia(data.id);
+      await fetchSlots();
+    } catch (err: any) {
+      if (err.response?.status !== 404) console.error(err);
+      setProfile(null);
+    } finally {
+      setLoading(false);
     }
-    if (data.profile_photo) setPhotoPreview(`http://localhost:5000${data.profile_photo}`);
-
-    // Fetch media
-    await fetchMedia(data.id);
-    await fetchSlots();
-  } catch (err: any) {
-    if (err.response?.status !== 404) console.error(err);
-    setProfile(null);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const fetchSlots = async () => {
-  try {
-    const res = await axios.get("http://localhost:5000/api/my-slots", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    setSlots(res.data);
-  } catch (err) {
-    console.error("Failed to fetch slots", err);
-  }
-};
+    try {
+      const res = await axios.get("http://localhost:5000/api/my-slots", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setSlots(res.data);
+    } catch (err) {
+      console.error("Failed to fetch slots", err);
+    }
+  };
 
   const fetchMedia = async (dentistId: number) => {
     try {
@@ -178,12 +184,14 @@ const [slotMsg,        setSlotMsg]        = useState<{ text: string; type: "succ
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
+
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setPhotoFile(file);
     setPhotoPreview(URL.createObjectURL(file));
   };
+
   const handleServiceFeeChange = (category: string, service_name: string, fee: string) => {
     setServices((prev) =>
       prev.map((s) =>
@@ -192,56 +200,81 @@ const [slotMsg,        setSlotMsg]        = useState<{ text: string; type: "succ
     );
   };
 
+  /* ── Slot handlers ── */
   const handleAddSlot = async () => {
-  if (!slotDate || !slotTime) {
-    setSlotMsg({ text: "Please select both a date and time.", type: "error" });
-    return;
-  }
-  setAddingSlot(true); setSlotMsg(null);
-  try {
-    await axios.post(
-      "http://localhost:5000/api/my-slots",
-      { slot_date: slotDate, slot_time: slotTime },
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    setSlotMsg({ text: "Slot added successfully!", type: "success" });
-    setSlotDate(""); setSlotTime("");
-    await fetchSlots();
-  } catch (err: any) {
-    setSlotMsg({ text: err.response?.data?.message || "Failed to add slot.", type: "error" });
-  } finally {
-    setAddingSlot(false);
-  }
-};
+    if (!slotDate || !slotTime) {
+      setSlotMsg({ text: "Please select both a date and time.", type: "error" });
+      return;
+    }
+    setAddingSlot(true); setSlotMsg(null);
+    try {
+      await axios.post(
+        "http://localhost:5000/api/my-slots",
+        { slot_date: slotDate, slot_time: slotTime },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setSlotMsg({ text: "Slot added successfully!", type: "success" });
+      setSlotDate(""); setSlotTime("");
+      await fetchSlots();
+    } catch (err: any) {
+      setSlotMsg({ text: err.response?.data?.message || "Failed to add slot.", type: "error" });
+    } finally {
+      setAddingSlot(false);
+    }
+  };
 
-const handleUpdateAppointmentStatus = async (
-  appointmentId: number,
-  status: "CONFIRMED" | "REJECTED" | "COMPLETED" | "CANCELLED"
-) => {
-  try {
-    await axios.patch(
-      `http://localhost:5000/api/appointments/${appointmentId}/status`,
-      { status },
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    setSlotMsg({ text: `Appointment ${status.toLowerCase()} successfully!`, type: "success" });
-    await fetchSlots();
-  } catch (err: any) {
-    setSlotMsg({ text: err.response?.data?.message || "Failed to update appointment.", type: "error" });
-  }
-};
+  const handleDeleteSlot = async (slotId: number) => {
+    if (!window.confirm("Delete this slot?")) return;
+    try {
+      await axios.delete(`http://localhost:5000/api/my-slots/${slotId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setSlots((prev) => prev.filter((s) => s.id !== slotId));
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Failed to delete slot.");
+    }
+  };
 
-const handleDeleteSlot = async (slotId: number) => {
-  if (!window.confirm("Delete this slot?")) return;
-  try {
-    await axios.delete(`http://localhost:5000/api/my-slots/${slotId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    setSlots((prev) => prev.filter((s) => s.id !== slotId));
-  } catch (err: any) {
-    alert(err.response?.data?.message || "Failed to delete slot.");
-  }
-};
+  const handleUpdateAppointmentStatus = async (
+    appointmentId: number,
+    status: "CONFIRMED" | "REJECTED" | "COMPLETED" | "CANCELLED"
+  ) => {
+    try {
+      await axios.patch(
+        `http://localhost:5000/api/appointments/${appointmentId}/status`,
+        { status },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setSlotMsg({ text: `Appointment ${status.toLowerCase()} successfully!`, type: "success" });
+      await fetchSlots();
+    } catch (err: any) {
+      setSlotMsg({ text: err.response?.data?.message || "Failed to update appointment.", type: "error" });
+    }
+  };
+
+  const handleDentistReschedule = async (appointmentId: number) => {
+    if (!rescheduleDate || !rescheduleTime) {
+      setSlotMsg({ text: "Please select both a new date and time.", type: "error" });
+      return;
+    }
+    setRescheduling(true); setSlotMsg(null);
+    try {
+      await axios.patch(
+        `http://localhost:5000/api/appointments/${appointmentId}/dentist-reschedule`,
+        { appointment_date: rescheduleDate, appointment_time: rescheduleTime },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setSlotMsg({ text: "Appointment rescheduled successfully!", type: "success" });
+      setReschedulingId(null);
+      setRescheduleDate("");
+      setRescheduleTime("");
+      await fetchSlots();
+    } catch (err: any) {
+      setSlotMsg({ text: err.response?.data?.message || "Failed to reschedule.", type: "error" });
+    } finally {
+      setRescheduling(false);
+    }
+  };
 
   /* ── Profile submit ── */
   const handleSubmit = async (e: React.FormEvent) => {
@@ -279,9 +312,7 @@ const handleDeleteSlot = async (slotId: number) => {
     }
   };
 
-  /* ══════════════════════════════════
-     CLINIC IMAGE HANDLERS
-  ══════════════════════════════════ */
+  /* ── Clinic image handlers ── */
   const handleImageFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -325,9 +356,7 @@ const handleDeleteSlot = async (slotId: number) => {
     }
   };
 
-  /* ══════════════════════════════════
-     TESTIMONIAL VIDEO HANDLERS
-  ══════════════════════════════════ */
+  /* ── Testimonial handlers ── */
   const handleVideoFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -427,41 +456,40 @@ const handleDeleteSlot = async (slotId: number) => {
       )}
 
       {/* ══════════════════════════════════════════════
-          DASHBOARD TABS (only show when profile exists)
+          DASHBOARD TABS
       ══════════════════════════════════════════════ */}
       {profile && !isEditing && (
         <div className="dashboard-tabs">
           <button
             className={`dashboard-tab ${activeTab === "profile" ? "dashboard-tab--active" : ""}`}
             onClick={() => setActiveTab("profile")}
-          > Profile</button>
+          >Profile</button>
           <button
             className={`dashboard-tab ${activeTab === "gallery" ? "dashboard-tab--active" : ""}`}
             onClick={() => setActiveTab("gallery")}
           >
-             Clinic Gallery
+            Clinic Gallery
             {clinicImages.length > 0 && <span className="dashboard-tab-badge">{clinicImages.length}</span>}
           </button>
           <button
             className={`dashboard-tab ${activeTab === "testimonials" ? "dashboard-tab--active" : ""}`}
             onClick={() => setActiveTab("testimonials")}
           >
-             Testimonials
+            Testimonials
             {testimonials.length > 0 && <span className="dashboard-tab-badge">{testimonials.length}</span>}
           </button>
-
           <button
-          className={`dashboard-tab ${activeTab === "slots" ? "dashboard-tab--active" : ""}`}
-          onClick={() => setActiveTab("slots")}
-        >
-          🕐 My Slots
-          {slots.length > 0 && <span className="dashboard-tab-badge">{slots.length}</span>}
-        </button>
+            className={`dashboard-tab ${activeTab === "slots" ? "dashboard-tab--active" : ""}`}
+            onClick={() => setActiveTab("slots")}
+          >
+            🕐 My Slots
+            {slots.length > 0 && <span className="dashboard-tab-badge">{slots.length}</span>}
+          </button>
         </div>
       )}
 
       {/* ══════════════════════════════════════════════
-          PROFILE TAB (read-only view)
+          PROFILE TAB
       ══════════════════════════════════════════════ */}
       {profile && !isEditing && activeTab === "profile" && (
         <div className="profile-view">
@@ -514,14 +542,11 @@ const handleDeleteSlot = async (slotId: number) => {
       ══════════════════════════════════════════════ */}
       {profile && !isEditing && activeTab === "gallery" && (
         <div className="media-section">
-          <h2 className="media-section-title"> Clinic Gallery</h2>
+          <h2 className="media-section-title">Clinic Gallery</h2>
           <p className="media-section-hint">Upload photos of your clinic — interior, equipment, reception area, etc. Patients love seeing the space before they visit.</p>
 
-          {/* Upload area */}
           <div className="media-upload-card">
             <h3 className="media-upload-card-title">Upload New Photo</h3>
-
-            {/* Drop zone */}
             <div
               className={`image-dropzone ${imagePreview ? "image-dropzone--has-preview" : ""}`}
               onClick={() => imageInputRef.current?.click()}
@@ -543,26 +568,15 @@ const handleDeleteSlot = async (slotId: number) => {
               )}
             </div>
             <input ref={imageInputRef} type="file" accept="image/jpeg,image/png,image/webp" style={{ display: "none" }} onChange={handleImageFileSelect} />
-
             <div className="media-upload-fields">
               <div className="media-field-group">
                 <label>Caption (optional)</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Our modern treatment room"
-                  value={imageCaption}
-                  onChange={(e) => setImageCaption(e.target.value)}
-                />
+                <input type="text" placeholder="e.g. Our modern treatment room" value={imageCaption} onChange={(e) => setImageCaption(e.target.value)} />
               </div>
-              <button
-                className="media-upload-btn"
-                onClick={handleImageUpload}
-                disabled={!imageFile || uploadingImage}
-              >
+              <button className="media-upload-btn" onClick={handleImageUpload} disabled={!imageFile || uploadingImage}>
                 {uploadingImage ? "Uploading..." : "📤 Upload Photo"}
               </button>
             </div>
-
             {imageMsg && (
               <div className={`media-msg media-msg--${imageMsg.type}`}>
                 {imageMsg.type === "success" ? "✅" : "❌"} {imageMsg.text}
@@ -570,7 +584,6 @@ const handleDeleteSlot = async (slotId: number) => {
             )}
           </div>
 
-          {/* Existing images grid */}
           {clinicImages.length === 0 ? (
             <div className="media-empty">
               <span>🏥</span>
@@ -586,9 +599,7 @@ const handleDeleteSlot = async (slotId: number) => {
                       <img src={`http://localhost:5000${img.image_url}`} alt={img.caption || "Clinic photo"} />
                     </div>
                     {img.caption && <p className="clinic-image-caption">{img.caption}</p>}
-                    <button className="clinic-image-delete" onClick={() => handleDeleteImage(img.id)}>
-                      🗑 Delete
-                    </button>
+                    <button className="clinic-image-delete" onClick={() => handleDeleteImage(img.id)}>🗑 Delete</button>
                   </div>
                 ))}
               </div>
@@ -602,14 +613,11 @@ const handleDeleteSlot = async (slotId: number) => {
       ══════════════════════════════════════════════ */}
       {profile && !isEditing && activeTab === "testimonials" && (
         <div className="media-section">
-          <h2 className="media-section-title"> Patient Testimonials</h2>
+          <h2 className="media-section-title">Patient Testimonials</h2>
           <p className="media-section-hint">Upload short video testimonials from happy patients. These appear on your public profile and help build trust.</p>
 
-          {/* Upload form */}
           <div className="media-upload-card">
             <h3 className="media-upload-card-title">Upload New Testimonial</h3>
-
-            {/* Video file pick */}
             <div className={`video-dropzone ${videoFile ? "video-dropzone--selected" : ""}`} onClick={() => videoInputRef.current?.click()}>
               {videoFile ? (
                 <div className="video-selected-info">
@@ -618,10 +626,7 @@ const handleDeleteSlot = async (slotId: number) => {
                     <p className="video-selected-name">{videoFile.name}</p>
                     <p className="video-selected-size">{(videoFile.size / (1024 * 1024)).toFixed(1)} MB</p>
                   </div>
-                  <button
-                    className="video-clear-btn"
-                    onClick={(e) => { e.stopPropagation(); setVideoFile(null); if (videoInputRef.current) videoInputRef.current.value = ""; }}
-                  >✕</button>
+                  <button className="video-clear-btn" onClick={(e) => { e.stopPropagation(); setVideoFile(null); if (videoInputRef.current) videoInputRef.current.value = ""; }}>✕</button>
                 </div>
               ) : (
                 <div className="video-dropzone-placeholder">
@@ -632,28 +637,15 @@ const handleDeleteSlot = async (slotId: number) => {
               )}
             </div>
             <input ref={videoInputRef} type="file" accept="video/mp4,video/webm,video/ogg,video/quicktime" style={{ display: "none" }} onChange={handleVideoFileSelect} />
-
             <div className="media-upload-fields">
               <div className="media-field-group">
                 <label>Patient Name *</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Rahul Sharma"
-                  value={videoPatientName}
-                  onChange={(e) => setVideoPatientName(e.target.value)}
-                />
+                <input type="text" placeholder="e.g. Rahul Sharma" value={videoPatientName} onChange={(e) => setVideoPatientName(e.target.value)} />
               </div>
               <div className="media-field-group">
                 <label>Description (optional)</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Root canal treatment — Pain-free experience"
-                  value={videoDescription}
-                  onChange={(e) => setVideoDescription(e.target.value)}
-                />
+                <input type="text" placeholder="e.g. Root canal treatment — Pain-free experience" value={videoDescription} onChange={(e) => setVideoDescription(e.target.value)} />
               </div>
-
-              {/* Upload progress */}
               {uploadingVideo && videoProgress > 0 && (
                 <div className="video-progress-wrap">
                   <div className="video-progress-track">
@@ -662,16 +654,10 @@ const handleDeleteSlot = async (slotId: number) => {
                   <span className="video-progress-label">{videoProgress}%</span>
                 </div>
               )}
-
-              <button
-                className="media-upload-btn"
-                onClick={handleVideoUpload}
-                disabled={!videoFile || uploadingVideo}
-              >
+              <button className="media-upload-btn" onClick={handleVideoUpload} disabled={!videoFile || uploadingVideo}>
                 {uploadingVideo ? `Uploading... ${videoProgress}%` : "📤 Upload Testimonial"}
               </button>
             </div>
-
             {videoMsg && (
               <div className={`media-msg media-msg--${videoMsg.type}`}>
                 {videoMsg.type === "success" ? "✅" : "❌"} {videoMsg.text}
@@ -679,10 +665,9 @@ const handleDeleteSlot = async (slotId: number) => {
             )}
           </div>
 
-          {/* Existing testimonials */}
           {testimonials.length === 0 ? (
             <div className="media-empty">
-              <span></span>
+              <span>🎬</span>
               <p>No testimonials yet. Upload your first video above!</p>
             </div>
           ) : (
@@ -691,18 +676,11 @@ const handleDeleteSlot = async (slotId: number) => {
               <div className="testimonials-manage-grid">
                 {testimonials.map((t) => (
                   <div key={t.id} className="testimonial-manage-card">
-                    <video
-                      src={`http://localhost:5000${t.video_url}`}
-                      controls
-                      className="testimonial-manage-video"
-                      preload="metadata"
-                    />
+                    <video src={`http://localhost:5000${t.video_url}`} controls className="testimonial-manage-video" preload="metadata" />
                     <div className="testimonial-manage-info">
-                      <p className="testimonial-manage-patient"> {t.patient_name}</p>
+                      <p className="testimonial-manage-patient">{t.patient_name}</p>
                       {t.description && <p className="testimonial-manage-desc">{t.description}</p>}
-                      <button className="clinic-image-delete" onClick={() => handleDeleteTestimonial(t.id)}>
-                        🗑 Delete
-                      </button>
+                      <button className="clinic-image-delete" onClick={() => handleDeleteTestimonial(t.id)}>🗑 Delete</button>
                     </div>
                   </div>
                 ))}
@@ -713,156 +691,237 @@ const handleDeleteSlot = async (slotId: number) => {
       )}
 
       {/* ══════════════════════════════════════════════
-    SLOTS TAB
-══════════════════════════════════════════════ */}
-{profile && !isEditing && activeTab === "slots" && (
-  <div className="media-section">
-    <h2 className="media-section-title">🕐 Manage Available Slots</h2>
-    <p className="media-section-hint">
-      Add time slots when you are available. Patients will only see and book these slots.
-    </p>
+          SLOTS TAB
+      ══════════════════════════════════════════════ */}
+      {profile && !isEditing && activeTab === "slots" && (
+        <div className="media-section">
+          <h2 className="media-section-title">🕐 Manage Available Slots</h2>
+          <p className="media-section-hint">
+            Add time slots when you are available. Patients will only see and book these slots.
+          </p>
 
-    {/* Add Slot Form */}
-    <div className="media-upload-card">
-      <h3 className="media-upload-card-title">Add New Slot</h3>
-      <div className="slot-add-row">
-        <div className="media-field-group">
-          <label>Date *</label>
-          <input
-            type="date"
-            min={new Date().toISOString().split("T")[0]}
-            value={slotDate}
-            onChange={(e) => setSlotDate(e.target.value)}
-          />
-        </div>
-        <div className="media-field-group">
-          <label>Time *</label>
-          <input
-            type="time"
-            value={slotTime}
-            onChange={(e) => setSlotTime(e.target.value)}
-          />
-        </div>
-        <button
-          className="media-upload-btn"
-          onClick={handleAddSlot}
-          disabled={addingSlot}
-        >
-          {addingSlot ? "Adding..." : "➕ Add Slot"}
-        </button>
-      </div>
-      {slotMsg && (
-        <div className={`media-msg media-msg--${slotMsg.type}`}>
-          {slotMsg.type === "success" ? "✅" : "❌"} {slotMsg.text}
-        </div>
-      )}
-    </div>
-
-    {/* Slots List */}
-    {slots.length === 0 ? (
-      <div className="media-empty">
-        <span>🕐</span>
-        <p>No upcoming slots. Add your first slot above!</p>
-      </div>
-    ) : (
-      <>
-        <h3 className="media-existing-title">Upcoming Slots ({slots.length})</h3>
-        <div className="slots-manage-grid">
-        {slots.map((slot) => {
-  const status = slot.appointment_status;
-  const hasPatient = !!slot.patient_name;
-  const isCancelled = status === "CANCELLED";
-
-  return (
-    <div
-      key={slot.id}
-      className={`slot-card 
-        ${!slot.is_available ? "slot-card--booked" : ""}
-        ${isCancelled ? "slot-card--cancelled" : ""}
-      `}
-    >
-      {/* Date / Time / Status row */}
-      <div className="slot-card-info">
-        <span className="slot-card-date">
-          📅 {new Date(slot.slot_date).toLocaleDateString("en-IN", {
-            weekday: "short", year: "numeric", month: "short", day: "numeric",
-          })}
-        </span>
-        <span className="slot-card-time">🕐 {slot.slot_time.slice(0, 5)}</span>
-        <span className={`slot-card-status ${
-          isCancelled              ? "slot-card-status--cancelled" :
-          slot.is_available        ? "slot-card-status--open"      :
-                                     "slot-card-status--booked"
-        }`}>
-          {isCancelled ? "Cancelled by Patient" : slot.is_available ? "Available" : "Booked"}
-        </span>
-      </div>
-
-      {/* Patient info block */}
-      {hasPatient && (
-        <div className={`slot-patient-info ${isCancelled ? "slot-patient-info--cancelled" : ""}`}>
-          <div className="slot-patient-header">
-            <p><strong>👤 {slot.patient_name}</strong></p>
-            {status && (
-              <span className={`slot-appt-status slot-appt-status--${status.toLowerCase()}`}>
-                {status}
-              </span>
+          {/* ── Add Slot Form ── */}
+          <div className="media-upload-card">
+            <h3 className="media-upload-card-title">Add New Slot</h3>
+            <div className="slot-add-row">
+              <div className="media-field-group">
+                <label>Date *</label>
+                <input
+                  type="date"
+                  min={new Date().toISOString().split("T")[0]}
+                  value={slotDate}
+                  onChange={(e) => setSlotDate(e.target.value)}
+                />
+              </div>
+              <div className="media-field-group">
+                <label>Time *</label>
+                <input
+                  type="time"
+                  value={slotTime}
+                  onChange={(e) => setSlotTime(e.target.value)}
+                />
+              </div>
+              <button className="media-upload-btn" onClick={handleAddSlot} disabled={addingSlot}>
+                {addingSlot ? "Adding..." : "➕ Add Slot"}
+              </button>
+            </div>
+            {slotMsg && (
+              <div className={`media-msg media-msg--${slotMsg.type}`}>
+                {slotMsg.type === "success" ? "✅" : "❌"} {slotMsg.text}
+              </div>
             )}
           </div>
-          {slot.patient_phone && <p>📞 {slot.patient_phone}</p>}
-          {/* Fee */}
-          {slot.consultation_fee !== undefined && (
-            <p className="slot-fee">💰 Consultation Fee: <strong>₹{slot.consultation_fee}</strong></p>
-          )}
-          {slot.patient_email && <p>✉️ {slot.patient_email}</p>}
-          {slot.notes && <p className="slot-notes">📝 {slot.notes}</p>}
 
-          {/* Action buttons — only for PENDING */}
-          {status === "PENDING" && slot.appointment_id && (
-            <div className="slot-action-btns">
-              <button
-                className="slot-btn slot-btn--confirm"
-                onClick={() => handleUpdateAppointmentStatus(slot.appointment_id!, "CONFIRMED")}
-              >
-                ✅ Confirm
-              </button>
-              <button
-                className="slot-btn slot-btn--reject"
-                onClick={() => handleUpdateAppointmentStatus(slot.appointment_id!, "REJECTED")}
-              >
-                ❌ Reject
-              </button>
+          {/* ── Slots List ── */}
+          {slots.length === 0 ? (
+            <div className="media-empty">
+              <span>🕐</span>
+              <p>No upcoming slots. Add your first slot above!</p>
             </div>
-          )}
+          ) : (
+            <>
+              <h3 className="media-existing-title">Upcoming Slots ({slots.length})</h3>
+              <div className="slots-manage-grid">
+                {slots.map((slot) => {
+                  const status      = slot.appointment_status;
+                  const hasPatient  = !!slot.patient_name;
+                  const isCancelled = status === "CANCELLED";
+                  const isRescheduling = reschedulingId === slot.appointment_id;
 
-          {/* Mark complete — only for CONFIRMED */}
-          {status === "CONFIRMED" && slot.appointment_id && (
-            <div className="slot-action-btns">
-              <button
-                className="slot-btn slot-btn--complete"
-                onClick={() => handleUpdateAppointmentStatus(slot.appointment_id!, "COMPLETED")}
-              >
-                🏁 Mark as Completed
-              </button>
-            </div>
+                  return (
+                    <div
+                      key={slot.id}
+                      className={`slot-card
+                        ${!slot.is_available ? "slot-card--booked" : ""}
+                        ${isCancelled ? "slot-card--cancelled" : ""}
+                      `}
+                    >
+                      {/* ── Date / Time / Availability row ── */}
+                      <div className="slot-card-info">
+                        <span className="slot-card-date">
+                          📅 {new Date(slot.slot_date).toLocaleDateString("en-IN", {
+                            weekday: "short", year: "numeric", month: "short", day: "numeric",
+                          })}
+                        </span>
+                        <span className="slot-card-time">
+                          🕐 {slot.slot_time.slice(0, 5)}
+                        </span>
+                        <span className={`slot-card-status ${
+                          isCancelled       ? "slot-card-status--cancelled" :
+                          slot.is_available ? "slot-card-status--open"      :
+                                              "slot-card-status--booked"
+                        }`}>
+                          {isCancelled
+                            ? "Cancelled by Patient"
+                            : slot.is_available
+                            ? "Available"
+                            : "Booked"}
+                        </span>
+                      </div>
+
+                      {/* ── Patient details block ── */}
+                      {hasPatient && (
+                        <div className={`slot-patient-info ${isCancelled ? "slot-patient-info--cancelled" : ""}`}>
+
+                          {/* Name + appointment status badge */}
+                          <div className="slot-patient-header">
+                            <p className="slot-patient-name">👤 {slot.patient_name}</p>
+                            {status && (
+                              <span className={`slot-appt-status slot-appt-status--${status.toLowerCase()}`}>
+                                {status}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Contact details */}
+                          {slot.patient_phone && (
+                            <p className="slot-patient-detail">📞 {slot.patient_phone}</p>
+                          )}
+                          {slot.patient_email && (
+                            <p className="slot-patient-detail">✉️ {slot.patient_email}</p>
+                          )}
+
+                          {/* Consultation fee */}
+                          {slot.consultation_fee !== undefined && (
+                            <p className="slot-fee">
+                              💰 Consultation Fee: <strong>₹{slot.consultation_fee}</strong>
+                            </p>
+                          )}
+
+                          {/* Notes */}
+                          {slot.notes && (
+                            <p className="slot-notes">📝 {slot.notes}</p>
+                          )}
+
+                          {/* ── PENDING: Approve / Reject / Reschedule ── */}
+                          {status === "PENDING" && slot.appointment_id && (
+                            <div className="slot-action-btns">
+                              <button
+                                className="slot-btn slot-btn--confirm"
+                                onClick={() => handleUpdateAppointmentStatus(slot.appointment_id!, "CONFIRMED")}
+                              >
+                                ✅ Approve
+                              </button>
+                              <button
+                                className="slot-btn slot-btn--reject"
+                                onClick={() => handleUpdateAppointmentStatus(slot.appointment_id!, "REJECTED")}
+                              >
+                                ❌ Reject
+                              </button>
+                              <button
+                                className="slot-btn slot-btn--reschedule"
+                                onClick={() => {
+                                  setReschedulingId(slot.appointment_id!);
+                                  setRescheduleDate(slot.appointment_date || "");
+                                  setRescheduleTime(slot.appointment_time || "");
+                                }}
+                              >
+                                🗓 Reschedule
+                              </button>
+                            </div>
+                          )}
+
+                          {/* ── CONFIRMED: Mark Complete / Reschedule ── */}
+                          {status === "CONFIRMED" && slot.appointment_id && (
+                            <div className="slot-action-btns">
+                              <button
+                                className="slot-btn slot-btn--complete"
+                                onClick={() => handleUpdateAppointmentStatus(slot.appointment_id!, "COMPLETED")}
+                              >
+                                🏁 Mark as Completed
+                              </button>
+                              <button
+                                className="slot-btn slot-btn--reschedule"
+                                onClick={() => {
+                                  setReschedulingId(slot.appointment_id!);
+                                  setRescheduleDate(slot.appointment_date || "");
+                                  setRescheduleTime(slot.appointment_time || "");
+                                }}
+                              >
+                                🗓 Reschedule
+                              </button>
+                            </div>
+                          )}
+
+                          {/* ── Inline reschedule form ── */}
+                          {isRescheduling && (
+                            <div className="reschedule-form">
+                              <p className="reschedule-form-title">📅 Pick a new date & time</p>
+                              <div className="reschedule-form-row">
+                                <input
+                                  type="date"
+                                  min={new Date().toISOString().split("T")[0]}
+                                  value={rescheduleDate}
+                                  onChange={(e) => setRescheduleDate(e.target.value)}
+                                />
+                                <input
+                                  type="time"
+                                  value={rescheduleTime}
+                                  onChange={(e) => setRescheduleTime(e.target.value)}
+                                />
+                              </div>
+                              <div className="slot-action-btns">
+                                <button
+                                  className="slot-btn slot-btn--confirm"
+                                  onClick={() => handleDentistReschedule(slot.appointment_id!)}
+                                  disabled={rescheduling}
+                                >
+                                  {rescheduling ? "Saving..." : "✅ Confirm Reschedule"}
+                                </button>
+                                <button
+                                  className="slot-btn slot-btn--reject"
+                                  onClick={() => {
+                                    setReschedulingId(null);
+                                    setRescheduleDate("");
+                                    setRescheduleTime("");
+                                  }}
+                                >
+                                  ✕ Cancel
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* ── Delete button ──
+                           Show for: empty available slots, or cancelled slots (for cleanup)
+                           Hide for: active PENDING / CONFIRMED bookings
+                      ── */}
+                      {(slot.is_available && !hasPatient) || isCancelled ? (
+                        <button className="clinic-image-delete" onClick={() => handleDeleteSlot(slot.id)}>
+                          🗑 {isCancelled ? "Remove Slot" : "Delete"}
+                        </button>
+                      ) : null}
+
+                    </div>
+                  );
+                })}
+              </div>
+            </>
           )}
         </div>
       )}
-
-      {/* Delete only available slots with no booking */}
-      {slot.is_available && !hasPatient && (
-        <button className="clinic-image-delete" onClick={() => handleDeleteSlot(slot.id)}>
-          🗑 Delete
-        </button>
-      )}
-    </div>
-  );
-})}
-        </div>
-      </>
-    )}
-  </div>
-)}
 
       {/* ══════════════════════════════════════════════
           CREATE / EDIT FORM
@@ -880,7 +939,7 @@ const handleDeleteSlot = async (slotId: number) => {
                   <img src={photoPreview} alt="Preview" className="photo-preview-img" />
                 ) : (
                   <div className="photo-preview-placeholder">
-                    <span></span>
+                    <span>📷</span>
                     <p>Click to upload photo</p>
                     <small>JPG, PNG or WEBP · Max 5MB</small>
                   </div>

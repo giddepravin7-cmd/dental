@@ -38,6 +38,12 @@ interface SlotItem {
   slot_date: string;
   slot_time: string;
   is_available: boolean;
+  appointment_id?: number;
+  appointment_status?: string;
+  notes?: string;
+  patient_name?: string;
+  patient_email?: string;
+  patient_phone?: string;
 }
 
 const STATUS_CONFIG = {
@@ -744,28 +750,44 @@ const handleDeleteSlot = async (slotId: number) => {
       <>
         <h3 className="media-existing-title">Upcoming Slots ({slots.length})</h3>
         <div className="slots-manage-grid">
-          {slots.map((slot) => (
-            <div key={slot.id} className={`slot-card ${!slot.is_available ? "slot-card--booked" : ""}`}>
-              <div className="slot-card-info">
-                <span className="slot-card-date">
-                  📅 {new Date(slot.slot_date).toLocaleDateString("en-IN", {
-                    weekday: "short", year: "numeric", month: "short", day: "numeric"
-                  })}
-                </span>
-                <span className="slot-card-time">
-                  🕐 {slot.slot_time.slice(0, 5)}
-                </span>
-                <span className={`slot-card-status ${slot.is_available ? "slot-card-status--open" : "slot-card-status--booked"}`}>
-                  {slot.is_available ? "Available" : "Booked"}
-                </span>
-              </div>
-              {slot.is_available && (
-                <button className="clinic-image-delete" onClick={() => handleDeleteSlot(slot.id)}>
-                  🗑 Delete
-                </button>
-              )}
+         {slots.map((slot) => (
+          <div key={slot.id} className={`slot-card ${!slot.is_available ? "slot-card--booked" : ""}`}>
+            <div className="slot-card-info">
+              <span className="slot-card-date">
+                📅 {new Date(slot.slot_date).toLocaleDateString("en-IN", {
+                  weekday: "short", year: "numeric", month: "short", day: "numeric"
+                })}
+              </span>
+              <span className="slot-card-time">
+                🕐 {slot.slot_time.slice(0, 5)}
+              </span>
+              <span className={`slot-card-status ${slot.is_available ? "slot-card-status--open" : "slot-card-status--booked"}`}>
+                {slot.is_available ? "Available" : "Booked"}
+              </span>
             </div>
-          ))}
+
+            {/* Patient details when booked */}
+            {!slot.is_available && slot.patient_name && (
+              <div className="slot-patient-info">
+                <p><strong>👤 {slot.patient_name}</strong></p>
+                {slot.patient_phone && <p>📞 {slot.patient_phone}</p>}
+                {slot.patient_email && <p>✉️ {slot.patient_email}</p>}
+                {slot.appointment_status && (
+                  <span className={`slot-appt-status slot-appt-status--${slot.appointment_status.toLowerCase()}`}>
+                    {slot.appointment_status}
+                  </span>
+                )}
+                {slot.notes && <p className="slot-notes">📝 {slot.notes}</p>}
+              </div>
+            )}
+
+            {slot.is_available && (
+              <button className="clinic-image-delete" onClick={() => handleDeleteSlot(slot.id)}>
+                🗑 Delete
+              </button>
+            )}
+          </div>
+        ))}
         </div>
       </>
     )}

@@ -1,0 +1,24 @@
+.appointments-container {
+  padding: 40px 20px;
+  max-width: 900px;
+  margin: auto;
+}
+
+.appointments-container h1 {
+  text-align: center;
+  font-size: 32px;
+  margin-bottom: 30px;
+}
+
+.appointments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.appointment-card {
+  background-color: #f9fafb;
+  padding: 20px;
+  border-radius: 10px;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}

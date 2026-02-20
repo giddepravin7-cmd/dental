@@ -103,7 +103,7 @@ const Navbar: React.FC = () => {
             <Link to="/about" className={`navbar__link ${isActive("/about") ? "navbar__link--active" : ""}`}>
             About Us
             </Link>
-
+            <Link to="/money-back" className={`navbar__link ${isActive("/money-back") ? "navbar__link--active" : ""}`}>3% Cashback</Link>
             <Link to="/faq"     className={`navbar__link ${isActive("/faq")     ? "navbar__link--active" : ""}`}>FAQ</Link>
             <Link to="/contact" className={`navbar__link ${isActive("/contact") ? "navbar__link--active" : ""}`}>Contact</Link>
           {/* PATIENT + DENTIST links */}

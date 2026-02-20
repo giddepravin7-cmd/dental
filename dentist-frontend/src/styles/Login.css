@@ -48,3 +48,19 @@
   margin-bottom: 10px;
   text-align: center;
 }
+.login-register-link {
+  text-align: center;
+  margin-top: 12px;
+  font-size: 14px;
+  color: #64748b;
+}
+
+.login-register-link a {
+  color: #14b8a6;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.login-register-link a:hover {
+  text-decoration: underline;
+}

@@ -355,7 +355,7 @@ const Landing: React.FC = () => {
             <Link to="/register">
               <button className="btn-white">Create Free Account</button>
             </Link>
-            <Link to="/search">
+            <Link to="/dentists">
               <button className="btn-outline-white">Browse Dentists</button>
             </Link>
           </div>

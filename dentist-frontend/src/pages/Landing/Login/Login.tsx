@@ -68,6 +68,11 @@ const Login: React.FC = () => {
         <button type="submit" disabled={loading}>
           {loading ? "Logging in..." : "Login"}
         </button>
+
+        <p className="login-register-link">
+          Don't have an account?{" "}
+          <a href="/register">Register here</a>
+        </p>
       </form>
     </div>
   );
